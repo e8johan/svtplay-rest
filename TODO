@@ -1,0 +1,4 @@
+- Implement basic REST interface using flask
+- Integrate to pirateplayer to automagically retrieve stream URLs
+- Extract dates and sXXeYY episode identifiers
+- Implement caching to avoid doing a million requests to svtplay.se
