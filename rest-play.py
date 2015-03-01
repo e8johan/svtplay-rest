@@ -182,9 +182,9 @@ parser = SvtPlayParser()
 parser.parse()
 
 for s in parser.shows():
-    print s.name(), s.url()
+    print s.name().encode('utf-8'), s.url().encode('utf-8')
     for e in s.episodes():
-        print "    ", e.title(), e.subTitle(), e.url()
+        print "    ", e.title().encode('utf-8'), e.subTitle().encode('utf-8'), e.url().encode('utf-8')
     print "    count:", len(s.episodes())
 
 print "count:", len(parser.shows())
