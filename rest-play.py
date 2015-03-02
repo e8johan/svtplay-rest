@@ -31,7 +31,7 @@ class SvtPlayParser(HTMLParser):
     def __init__(self):
         HTMLParser.__init__(self)
         
-        self.__shows = []
+        self.__shows = {}
         
     def parse(self):
         response = urllib2.urlopen('http://svtplay.se/program')
@@ -44,10 +44,12 @@ class SvtPlayParser(HTMLParser):
         if tag == 'a':
             for attr in attrs:
                 if attr[0] == 'class' and attr[1] == 'play_alphabetic-list__video-link':
-                    self.__shows.append(Show(attrs))
+                    s = Show(attrs)
+                    if not s in self.__shows:
+                        self.__shows[s.urlBase()] = s;
 
     def shows(self):
-        return self.__shows
+        return self.__shows.values()
 
 class SvtEpisodeParser(HTMLParser):
     """
@@ -120,38 +122,29 @@ class SvtEpisodeParser(HTMLParser):
         return self.__title
     def subTitle(self):
         return self.__subTitle
+    def urlBase(self):
+        return self.__urlBase
 
 class Show:
     def __init__(self, list):
         self.__name = ''
-        self.__canMobile = False
-        self.__canInternational = False
         self.__urlBase = ''
-        self.__episodes = []
+        self.__episodes = {}
         
         for item in list:
             if item[0] == 'title':
                 self.__name = item[1]
             elif item[0] == 'href':
                 self.__urlBase = item[1]
-            elif item[0] == 'data-mobile':
-                if item[1] == 'true':
-                    self.__canMobile = True
-            elif item[0] == 'data-abroad':
-                if item[1] == 'true':
-                    self.__canInternational = True
     
     def name(self):
         return self.__name
     
-    def canMobile(self):
-        return self.__canMobile
-
-    def canInternational(self):
-        return self.__canInternational
-
     def url(self):
         return 'http://svtplay.se' + self.__urlBase
+    
+    def urlBase(self):
+        return self.__urlBase;
     
     def episodes(self):
         if len(self.__episodes) == 0:
@@ -159,11 +152,12 @@ class Show:
             parser.parse()
         
             for e in parser.episodes():
-                parser = SvtEpisodeParser('http://svtplay.se' + e, self.__urlBase)
-                parser.parse()
-                self.__episodes.append(Episode(parser.title(), parser.subTitle(), e))
+                if not e in self.__episodes:
+                    parser = SvtEpisodeParser('http://svtplay.se' + e, self.__urlBase)
+                    parser.parse()
+                    self.__episodes[e] = Episode(parser.title(), parser.subTitle(), e)
 
-        return self.__episodes
+        return self.__episodes.values()
     
 class Episode:
     def __init__(self, title, subTitle, urlBase):
