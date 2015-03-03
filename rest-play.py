@@ -18,6 +18,8 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+import pickle
+import datetime
 import urllib2
 import htmlentitydefs
 from HTMLParser import HTMLParser
@@ -32,13 +34,30 @@ class SvtPlayParser(HTMLParser):
         HTMLParser.__init__(self)
         
         self.__shows = {}
+        self.__lastRequest = datetime.datetime(2000, 1, 1)
         
     def parse(self):
+        self.__lastRequest = datetime.datetime.utcnow()
+
         response = urllib2.urlopen('http://svtplay.se/program')
         encoding = response.headers.getparam('charset')
         body = response.read().decode(encoding)
 
         self.feed(body)
+
+    def serialize(self):
+        showmap = {}
+        for s in self.__shows.keys():
+            showmap[s] = self.__shows[s].serialize()
+            
+        return {'shows': showmap}
+    
+    def deserialize(self, data):
+        self.__shows = {}
+        for s in data['shows'].keys():
+            show = Show()
+            show.deserialize(data['shows'][s])
+            self.__shows[s] = show
 
     def handle_starttag(self, tag, attrs):
         if tag == 'a':
@@ -49,6 +68,9 @@ class SvtPlayParser(HTMLParser):
                         self.__shows[s.urlBase()] = s;
 
     def shows(self):
+        if (datetime.datetime.utcnow() - self.__lastRequest).seconds > 3600:
+            self.parse()
+
         return self.__shows.values()
 
 class SvtEpisodeParser(HTMLParser):
@@ -126,16 +148,33 @@ class SvtEpisodeParser(HTMLParser):
         return self.__urlBase
 
 class Show:
-    def __init__(self, list):
+    def __init__(self, list=[]):
         self.__name = ''
         self.__urlBase = ''
         self.__episodes = {}
+        self.__lastRequest = datetime.datetime(2000, 1, 1)
         
         for item in list:
             if item[0] == 'title':
                 self.__name = item[1]
             elif item[0] == 'href':
                 self.__urlBase = item[1]
+    
+    def serialize(self):
+        episodemap = {}
+        for e in self.__episodes.keys():
+            episodemap[e] = self.__episodes[e].serialize()
+            
+        return {'name': self.__name, 'urlBase': self.__urlBase, 'episodes': episodemap}
+    
+    def deserialize(self, data):
+        self.__name = data['name']
+        self.__urlBase = data['urlBase']
+        self.__episodes = {}
+        for e in data['episodes'].keys():
+            episode = Episode()
+            episode.deserialize(data['episodes'][e])
+            self.__episodes[e] = episode
     
     def name(self):
         return self.__name
@@ -147,7 +186,9 @@ class Show:
         return self.__urlBase;
     
     def episodes(self):
-        if len(self.__episodes) == 0:
+        if len(self.__episodes) == 0 or (datetime.datetime.utcnow() - self.__lastRequest).seconds > 3600:
+            self.__lastRequest = datetime.datetime.utcnow()
+
             parser = SvtEpisodeParser(self.url(), self.__urlBase)
             parser.parse()
         
@@ -156,14 +197,24 @@ class Show:
                     parser = SvtEpisodeParser('http://svtplay.se' + e, self.__urlBase)
                     parser.parse()
                     self.__episodes[e] = Episode(parser.title(), parser.subTitle(), e)
+                else:
+                    print "SKIP!"
 
         return self.__episodes.values()
     
 class Episode:
-    def __init__(self, title, subTitle, urlBase):
+    def __init__(self, title='', subTitle='', urlBase=''):
         self.__title = title
         self.__subTitle = subTitle
         self.__urlBase = urlBase
+
+    def serialize(self):
+        return {'title': self.__title, 'subTitle': self.__subTitle, 'urlBase': self.__urlBase}
+
+    def deserialize(self, data):
+        self.__title = data['title']
+        self.__subTitle = data['subTitle']
+        self.__urlBase = data['urlBase']
 
     def title(self):
         return self.__title
@@ -172,13 +223,19 @@ class Episode:
     def url(self):
         return 'http://svtplay.se' + self.__urlBase
 
-parser = SvtPlayParser()
-parser.parse()
+if __name__ == '__main__':
+    parser = SvtPlayParser()
+    try:
+        parser.deserialize(pickle.load(open('shows.p', 'rb')))
+    except IOError:
+        pass
 
-for s in parser.shows():
-    print s.name().encode('utf-8'), s.url().encode('utf-8')
-    for e in s.episodes():
-        print "    ", e.title().encode('utf-8'), e.subTitle().encode('utf-8'), e.url().encode('utf-8')
-    print "    count:", len(s.episodes())
+    for s in parser.shows():
+        print s.name().encode('utf-8'), s.url().encode('utf-8')
+        for e in s.episodes():
+            print "    ", e.title().encode('utf-8'), e.subTitle().encode('utf-8'), e.url().encode('utf-8')
+        print "    count:", len(s.episodes())
+        pickle.dump(parser.serialize(), open('shows.p', 'wb'))
 
-print "count:", len(parser.shows())
+    print "count:", len(parser.shows())
+    pickle.dump(parser.serialize(), open('shows.p', 'wb'))
