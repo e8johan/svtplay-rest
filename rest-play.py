@@ -21,6 +21,7 @@
 import pickle
 import datetime
 
+import urllib
 import urllib2
 import htmlentitydefs
 from HTMLParser import HTMLParser
@@ -218,11 +219,19 @@ class Show:
         self.maybeParse()
         return self.__episodes.values()
     
+    def episode(self, uniqueName):
+        un = '/' + uniqueName + '/'
+        es = [e for e in self.__episodes.keys() if e.find(un) != -1]
+        if len(es) == 1:
+            return self.__episodes[es[0]]
+        else:
+            raise KeyError
+    
     def json(self):
         self.maybeParse()
         es = []
         for e in self.__episodes.keys():
-            es.append({'title': self.__episodes[e].title(), 'sub-title': self.__episodes[e].subTitle(), 'site-url': self.__episodes[e].url(), 'unique-name': self.urlBase() + '/' + e.split('/')[2]})
+            es.append(self.__episodes[e].jsonmap())
         return jsonify({'name': self.name(), 'site-url': self.url(), 'episodes': es})
     
 class Episode:
@@ -245,14 +254,24 @@ class Episode:
         return self.__subTitle
     def url(self):
         return 'http://svtplay.se' + self.__urlBase
+    
+    def jsonmap(self):
+        return {'title': self.title(), 'sub-title': self.subTitle(), 'site-url': self.url(), 'stream-url': 'http://pirateplay.se:80/api/get_streams.js?' + urllib.urlencode({'url': self.url()})}
+    
+    def json(self):
+        return jsonify(self.jsonmap())
 
+# Create Flash server
 app = Flask(__name__)
+
+# Create SVT Play parser and pre-populate cache
 parser = SvtPlayParser()
 try:
     parser.deserialize(pickle.load(open('shows.p', 'rb')))
 except IOError:
     pass
 
+# Flask routes
 @app.route('/shows', methods=['GET'])
 def getShows():
     try:
@@ -273,16 +292,25 @@ def getShow(id):
     except:
         abort(500)
 
-if __name__ == '__main__':
-    
+@app.route('/shows/<string:showId>/<string:streamId>', methods=['GET'])
+def getShowStream(showId, streamId):
+    try:
+        s = parser.show('/' + showId)
+        e = s.episode(streamId)
+        j = e.json()
+        pickle.dump(parser.serialize(), open('shows.p', 'wb'))
+        return j
+    except KeyError:
+        abort(404)
+    except:
+        abort(500)
+
+# Run the server
+if __name__ == '__main__':    
     app.run(debug=True)
 
-    #for s in parser.shows():
-        #print s.name().encode('utf-8'), s.url().encode('utf-8')
-        #for e in s.episodes():
-            #print "    ", e.title().encode('utf-8'), e.subTitle().encode('utf-8'), e.url().encode('utf-8')
-        #print "    count:", len(s.episodes())
-        #pickle.dump(parser.serialize(), open('shows.p', 'wb'))
-
-    #print "count:", len(parser.shows())
-    #pickle.dump(parser.serialize(), open('shows.p', 'wb'))
+# The following snippet parses all of SVT Play and persists the results
+#    for s in parser.shows():
+#        print s.name()
+#        s.episodes():
+#    pickle.dump(parser.serialize(), open('shows.p', 'wb'))
