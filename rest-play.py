@@ -231,7 +231,9 @@ class Show:
         self.maybeParse()
         es = []
         for e in self.__episodes.keys():
-            es.append(self.__episodes[e].jsonmap())
+            jm = self.__episodes[e].jsonmap()
+            jm['unique-name'] = '/' + e.split('/')[2]
+            es.append(jm)
         return jsonify({'name': self.name(), 'site-url': self.url(), 'episodes': es})
     
 class Episode:
