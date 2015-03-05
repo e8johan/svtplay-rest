@@ -1,4 +1,3 @@
 - Extract dates and sXXeYY episode identifiers
-- Add last visit counter per show to make it possible to detect changes
 - Sort episodes (or rather, keep the order for svtplay.se)
 - Drop old episodes, or at least mark them as unavailable
