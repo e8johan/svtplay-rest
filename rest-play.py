@@ -129,12 +129,21 @@ class SvtEpisodeParser(HTMLParser):
             href = ''
             
             for attr in attrs:
-                if attr[0] == 'class' and attr[1] == 'play_js-video-link playJsGridItem play_js-videolist-element-link play_videolist-element__link':
+                if attr[0] == 'class' and (attr[1] == 'play_js-video-link playJsGridItem play_js-videolist-element-link play_videolist-element__link' or attr[1] == 'play_vertical-list__header-link'):
                     hasClass = True
-                elif attr[0] == 'href' and attr[1].find(self.__urlBase) >= 0:
-                    href = attr[1]
+                elif attr[0] == 'href':
+                    found = False
+                    if attr[1].find(self.__urlBase) >= 0:
+                        found = True
+                    elif self.__urlBase in Show.urlBaseMap.keys():
+                        for ub in Show.urlBaseMap[self.__urlBase]:
+                            if attr[1].find(ub) >=0:
+                                found = True
+                    if found:
+                        href = attr[1]
             
             if hasClass and href != '':
+                print "FOUND", href
                 self.__episodes.append(href)
         elif tag == 'h1':
             for attr in attrs:
@@ -168,6 +177,8 @@ class SvtEpisodeParser(HTMLParser):
         return self.__urlBase
 
 class Show:
+    urlBaseMap = {'/djursjukhuset-i-barnkanalen': ['/djursjukhuset']}
+
     def __init__(self, list=[]):
         self.__name = ''
         self.__urlBase = ''
@@ -305,8 +316,8 @@ def getShow(id):
         return j
     except KeyError:
         abort(404)
-    except:
-        abort(500)
+#    except:
+#        abort(500)
 
 @app.route('/shows/<string:showId>/<string:streamId>', methods=['GET'])
 def getShowStream(showId, streamId):
