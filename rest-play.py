@@ -57,7 +57,7 @@ class SvtPlayParser(HTMLParser):
         for s in self.__shows.keys():
             showmap[s] = self.__shows[s].serialize()
             
-        return {'shows': showmap}
+        return {'lastUpdateIndex': Episode.lastUpdateIndex, 'shows': showmap}
     
     def deserialize(self, data):
         self.__shows = {}
@@ -65,6 +65,8 @@ class SvtPlayParser(HTMLParser):
             show = Show()
             show.deserialize(data['shows'][s])
             self.__shows[s] = show
+            
+        Episode.lastUpdateIndex = data['lastUpdateIndex']
 
     def handle_starttag(self, tag, attrs):
         if tag == 'a':
@@ -83,6 +85,7 @@ class SvtPlayParser(HTMLParser):
         return self.__shows[id]
     
     def json(self):
+        self.maybeParse()
         shows = self.__shows.keys()
         res = []
         for s in shows:
@@ -237,18 +240,27 @@ class Show:
         return jsonify({'name': self.name(), 'site-url': self.url(), 'episodes': es})
     
 class Episode:
+    lastUpdateIndex = 1 # Serialize by SvtPlayParser
+    
     def __init__(self, title='', subTitle='', urlBase=''):
         self.__title = title
         self.__subTitle = subTitle
         self.__urlBase = urlBase
+        
+        if not urlBase == '':
+            Episode.lastUpdateIndex = Episode.lastUpdateIndex + 1
+            self.__updateIndex = Episode.lastUpdateIndex
+        else:
+            self.__updateIndex = 0
 
     def serialize(self):
-        return {'title': self.__title, 'subTitle': self.__subTitle, 'urlBase': self.__urlBase}
+        return {'title': self.__title, 'subTitle': self.__subTitle, 'urlBase': self.__urlBase, 'updateIndex': self.__updateIndex}
 
     def deserialize(self, data):
         self.__title = data['title']
         self.__subTitle = data['subTitle']
         self.__urlBase = data['urlBase']
+        self.__updateIndex = data['updateIndex']
 
     def title(self):
         return self.__title
@@ -256,9 +268,11 @@ class Episode:
         return self.__subTitle
     def url(self):
         return 'http://svtplay.se' + self.__urlBase
+    def updateIndex(self):
+        return self.__updateIndex
     
     def jsonmap(self):
-        return {'title': self.title(), 'sub-title': self.subTitle(), 'site-url': self.url(), 'stream-url': 'http://pirateplay.se:80/api/get_streams.js?' + urllib.urlencode({'url': self.url()})}
+        return {'title': self.title(), 'sub-title': self.subTitle(), 'update-index': self.__updateIndex, 'site-url': self.url(), 'stream-url': 'http://pirateplay.se:80/api/get_streams.js?' + urllib.urlencode({'url': self.url()})}
     
     def json(self):
         return jsonify(self.jsonmap())
